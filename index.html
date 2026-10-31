@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Akkordblatt</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Akkordblatt">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<style>
+/* Immer weißes Papier: Liederbuch-Seite statt App-Oberfläche, Werkzeuge bleiben am Rand. */
+:root {
+  --paper: #ffffff;
+  --ink: #15161a;
+  --muted: #6b6e76;
+  --line: #e4e6ea;
+  --wash: #f2f4f8;
+  --accent: #1d4ed8;
+  --danger: #c0261c;
+  --serif: "Iowan Old Style", "Palatino", Georgia, serif;
+  --ui: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.4 var(--ui); }
+button, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Startseite */
+#home { max-width: 760px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 36px) max(20px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 32px) max(20px, env(safe-area-inset-left, 0px)); }
+#home h1 { font: 700 44px/1.1 var(--serif); margin: 0 0 22px; letter-spacing: -.01em; }
+#searchForm { display: flex; gap: 10px; }
+#q { flex: 1; min-width: 0; height: 58px; padding: 0 18px; font-size: 21px; border: 1.5px solid var(--ink); border-radius: 12px; background: var(--paper); }
+.primary { height: 58px; padding: 0 24px; border-radius: 12px; background: var(--ink); color: var(--paper); font-weight: 600; }
+#status { min-height: 26px; margin: 14px 2px 0; color: var(--muted); }
+#status.bad { color: var(--danger); }
+.section { margin-top: 26px; }
+.section h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 2px 6px; }
+.list { display: flex; flex-direction: column; }
+.item { display: flex; flex-direction: column; align-items: flex-start; width: 100%; min-height: 66px; justify-content: center; padding: 10px 4px; text-align: left; border-bottom: 1px solid var(--line); }
+.item b { font: 600 21px/1.25 var(--serif); }
+.item span { color: var(--muted); font-size: 15px; }
+.item:active { background: var(--wash); }
+.textbtn { color: var(--accent); min-height: 44px; font-weight: 500; }
+.footer { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-top: 30px; }
+.empty { display: flex; gap: 18px; align-items: center; padding: 22px 2px; color: var(--muted); }
+.empty svg { flex: none; }
+
+/* Blatt */
+#sheetView { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--paper); }
+#bar { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: calc(env(safe-area-inset-top, 0px) + 6px) max(10px, env(safe-area-inset-right, 0px)) 6px max(10px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); background: var(--paper); }
+#barTitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 600 17px var(--serif); }
+.tools { display: flex; align-items: center; gap: 4px; }
+.tb { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 10px; }
+.tb svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tb[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.tb:disabled { opacity: .28; }
+.back { display: flex; align-items: center; gap: 2px; height: 46px; padding: 0 8px 0 2px; color: var(--accent); font-weight: 500; }
+.back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+.dot { width: 40px; height: 46px; display: grid; place-items: center; }
+.dot i { display: block; width: 24px; height: 24px; border-radius: 50%; background: var(--c); }
+.dot[aria-pressed="true"] i { box-shadow: 0 0 0 2.5px var(--paper), 0 0 0 4.5px var(--c); }
+
+#scroller { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; touch-action: pan-y; overscroll-behavior: contain; background: var(--paper); }
+#scroller.finger { touch-action: none; }
+#sizer { position: relative; margin: 0 auto; overflow: hidden; }
+#paper { position: absolute; left: 0; top: 0; width: 1000px; transform-origin: 0 0; background: var(--paper); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#head { position: absolute; left: 60px; right: 60px; top: 44px; }
+#head h2 { margin: 0; font: 700 52px/1.1 var(--serif); }
+#head p { margin: 6px 0 0; font: 400 28px/1.2 var(--ui); color: var(--muted); }
+.row { position: absolute; left: 60px; height: 46px; line-height: 46px; font: 400 34px/46px var(--serif); white-space: pre; }
+.row.label { font: 600 22px/46px var(--ui); letter-spacing: .05em; color: var(--muted); }
+#ink { position: absolute; left: 0; top: 0; width: 1000px; pointer-events: none; }
+#ink path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+#menu { position: fixed; right: max(10px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 62px); z-index: 5; width: 300px; max-width: calc(100vw - 20px); padding: 14px; display: flex; flex-direction: column; gap: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 36px rgba(16, 20, 30, .16); }
+#menu h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: var(--wash); border-radius: 10px; margin-bottom: 8px; }
+.seg button { height: 42px; border-radius: 8px; font-size: 15px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.mi { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 4px; width: 100%; text-align: left; border-top: 1px solid var(--line); }
+.mi.bad { color: var(--danger); }
+.mi input { width: 22px; height: 22px; accent-color: var(--ink); }
+
+dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 20px; border: 0; border-radius: 16px; box-shadow: 0 20px 60px rgba(16, 20, 30, .28); color: var(--ink); background: var(--paper); }
+dialog::backdrop { background: rgba(16, 20, 30, .35); }
+dialog h2 { margin: 0 0 14px; font: 700 26px var(--serif); }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.fields input, #fText { width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+#fText { height: 46vh; resize: none; font-family: var(--serif); line-height: 1.45; }
+.actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.actions button { height: 48px; padding: 0 20px; border-radius: 10px; font-weight: 600; }
+.actions .cancel { background: var(--wash); }
+.actions .save { background: var(--ink); color: var(--paper); }
+@media (max-width: 640px) { #barTitle { display: none; } #home h1 { font-size: 36px; } .fields { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1.2-4.6L16.6 4a2 2 0 0 1 2.9 0l.5.5a2 2 0 0 1 0 2.9L8.6 18.8z"/><path d="M14.5 6.2l3.3 3.3"/></symbol>
+  <symbol id="i-erase" viewBox="0 0 24 24"><path d="M8 20h12"/><path d="M4.6 14.6l9-9a2 2 0 0 1 2.8 0l3 3a2 2 0 0 1 0 2.8L12 18.8a4 4 0 0 1-2.8 1.2H8.4l-3.8-3.8a1.1 1.1 0 0 1 0-1.6z"/><path d="M9.5 9.7l5.8 5.8"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8 5L3.5 9.5 8 14"/><path d="M4 9.5h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M16 5l4.5 4.5L16 14"/><path d="M20 9.5H10a6 6 0 0 0 0 12h3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+</svg>
+
+<main id="home">
+  <h1>Akkordblatt</h1>
+  <form id="searchForm" autocomplete="off">
+    <input id="q" type="search" placeholder="Songtitel, gern mit Interpret" aria-label="Songtitel" enterkeyhint="search" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button class="primary" type="submit">Suchen</button>
+  </form>
+  <p id="status" role="status"></p>
+  <section class="section" id="resultsBox" hidden>
+    <h2>Gefunden</h2>
+    <div class="list" id="results"></div>
+    <button class="textbtn" id="pasteFromResults" type="button">Nicht dabei? Text selbst einfügen</button>
+  </section>
+  <section class="section">
+    <h2>Deine Songs</h2>
+    <div class="list" id="songs"></div>
+    <div class="empty" id="empty" hidden>
+      <svg width="58" height="72" viewBox="0 0 58 72" aria-hidden="true" fill="none" stroke="#15161a" stroke-width="1.5"><path d="M5 6h48" stroke-width="4"/><path d="M5 6v62M14.6 6v62M24.2 6v62M33.8 6v62M43.4 6v62M53 6v62M5 21h48M5 36h48M5 52h48M5 68h48"/><circle cx="14.6" cy="28" r="4.5" fill="#1d4ed8" stroke="none"/><circle cx="24.2" cy="28" r="4.5" fill="#1d4ed8" stroke="none"/></svg>
+      <span>Noch keine Songs. Gib oben einen Titel ein, dann liegt der Text gleich auf dem Blatt.</span>
+    </div>
+  </section>
+  <div class="footer">
+    <button class="textbtn" id="pasteNew" type="button">Text selbst einfügen</button>
+    <button class="textbtn" id="backupSave" type="button">Sicherung speichern</button>
+    <button class="textbtn" id="backupLoad" type="button">Sicherung laden</button>
+    <input id="backupFile" type="file" accept="application/json,.json" hidden>
+  </div>
+</main>
+
+<section id="sheetView" hidden>
+  <header id="bar">
+    <button class="back" id="back" type="button"><svg><use href="#i-back"/></svg>Songs</button>
+    <div id="barTitle"></div>
+    <div class="tools">
+      <button class="tb" id="toolPen" type="button" aria-label="Stift" aria-pressed="true"><svg><use href="#i-pen"/></svg></button>
+      <button class="tb" id="toolErase" type="button" aria-label="Radierer" aria-pressed="false"><svg><use href="#i-erase"/></svg></button>
+      <span class="sep"></span>
+      <button class="dot" data-color="#1d4ed8" style="--c:#1d4ed8" type="button" aria-label="Blau" aria-pressed="true"><i></i></button>
+      <button class="dot" data-color="#d11a2a" style="--c:#d11a2a" type="button" aria-label="Rot" aria-pressed="false"><i></i></button>
+      <button class="dot" data-color="#15161a" style="--c:#15161a" type="button" aria-label="Schwarz" aria-pressed="false"><i></i></button>
+      <span class="sep"></span>
+      <button class="tb" id="undo" type="button" aria-label="Rückgängig" disabled><svg><use href="#i-undo"/></svg></button>
+      <button class="tb" id="redo" type="button" aria-label="Wiederholen" disabled><svg><use href="#i-redo"/></svg></button>
+      <button class="tb" id="more" type="button" aria-label="Mehr" aria-expanded="false"><svg><use href="#i-more"/></svg></button>
+    </div>
+  </header>
+  <div id="scroller">
+    <div id="sizer">
+      <div id="paper">
+        <div id="head"><h2 id="sTitle"></h2><p id="sArtist"></p></div>
+        <div id="rows"></div>
+        <svg id="ink" xmlns="http://www.w3.org/2000/svg" width="1000"></svg>
+      </div>
+    </div>
+  </div>
+  <div id="menu" hidden>
+    <h3>Platz für Akkorde</h3>
+    <div class="seg" id="gapSeg">
+      <button type="button" data-gap="s">Eng</button>
+      <button type="button" data-gap="m">Normal</button>
+      <button type="button" data-gap="l">Weit</button>
+    </div>
+    <label class="mi">Mit dem Finger schreiben<input id="finger" type="checkbox"></label>
+    <button class="mi" id="editText" type="button">Text bearbeiten</button>
+    <button class="mi bad" id="deleteSong" type="button">Song löschen</button>
+  </div>
+</section>
+
+<dialog id="editor">
+  <form id="editorForm" method="dialog">
+    <h2 id="editorTitle">Text einfügen</h2>
+    <div class="fields">
+      <input id="fTitle" placeholder="Titel" aria-label="Titel" required>
+      <input id="fArtist" placeholder="Interpret" aria-label="Interpret">
+    </div>
+    <textarea id="fText" placeholder="Songtext hier einfügen" aria-label="Songtext"></textarea>
+    <div class="actions">
+      <button class="cancel" id="editorCancel" type="button">Abbrechen</button>
+      <button class="save" type="submit">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// Das Blatt hat feste logische Maße und wird nur skaliert. So bleiben Text und
+// Handschrift beim Drehen des iPads exakt übereinander.
+const W = 1000, MX = 60, FS = 34, TH = 46, HEAD = 150, FOOT = 420, MAX_SCALE = 1;
+const FONT = '"Iowan Old Style", "Palatino", Georgia, serif';
+const GAPS = { s: 44, m: 70, l: 104 };
+const PEN_W = 3.4, ERASE_R = 16;
+
+/* ---------- Speicher ---------- */
+let dbp;
+function db() {
+  return dbp ||= new Promise((ok, no) => {
+    const r = indexedDB.open('akkordblatt', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('songs', { keyPath: 'id' });
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => no(r.error);
+  });
+}
+async function tx(mode, fn) {
+  const d = await db();
+  return new Promise((ok, no) => {
+    const t = d.transaction('songs', mode);
+    const r = fn(t.objectStore('songs'));
+    t.oncomplete = () => ok(r && r.result);
+    t.onerror = () => no(t.error);
+  });
+}
+const allSongs = () => tx('readonly', s => s.getAll());
+const putSong = song => tx('readwrite', s => s.put(song));
+const delSong = id => tx('readwrite', s => s.delete(id));
+
+/* ---------- Songtext holen ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function getJson(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { status: res.status });
+  return res.json();
+}
+async function lrclib(q) {
+  // LRCLIB antwortet unter Last öfter mit 503, darum ein zweiter Versuch.
+  const url = 'https://lrclib.net/api/search?q=' + encodeURIComponent(q);
+  let last;
+  for (const wait of [0, 900]) {
+    if (wait) await sleep(wait);
+    try { return (await getJson(url)) || []; } catch (e) { last = e; }
+  }
+  throw last;
+}
+// Zweite Quelle: findet Songs auch nur über den Titel, der Text kommt erst beim Antippen.
+async function suggestions(q) {
+  const j = await getJson('https://api.lyrics.ovh/suggest/' + encodeURIComponent(q));
+  return ((j && j.data) || []).map((d, i) => ({
+    trackName: d.title_short || d.title,
+    artistName: d.artist && d.artist.name,
+    albumName: d.album && d.album.title,
+    lazy: true,
+    order: i
+  }));
+}
+function cleanOvh(text) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  if (/^Paroles de la chanson/i.test(lines[0])) lines.shift();
+  return lines.join('\n');
+}
+async function fetchText(h) {
+  if (!h.lazy) return plainText(h);
+  const artist = encodeURIComponent(h.artistName), track = encodeURIComponent(h.trackName);
+  try {
+    const j = await getJson(`https://api.lyrics.ovh/v1/${artist}/${track}`);
+    if (j && j.lyrics && j.lyrics.trim()) return cleanOvh(j.lyrics);
+  } catch { /* weiter zur anderen Quelle */ }
+  try {
+    const j = await getJson(`https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`);
+    if (j) return plainText(j);
+  } catch { /* beide Quellen leer */ }
+  return '';
+}
+const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ß ]+/g, ' ').replace(/\s+/g, ' ').trim();
+function rank(q, h) {
+  const t = norm(h.trackName), a = norm(h.artistName);
+  let s = 0;
+  if (t === q || `${t} ${a}` === q || `${a} ${t}` === q) s += 50;
+  else if (q.includes(t)) s += 30;
+  else if (t.includes(q)) s += 15;
+  if (a && q.includes(a)) s += 20;
+  if (/karaoke|tribute|instrumental|made famous|in the style|backing track/i.test(`${h.trackName} ${h.artistName} ${h.albumName || ''}`)) s -= 45;
+  if (/^(various|unknown|verschiedene)/.test(a)) s -= 25;
+  return s;
+}
+function plainText(h) {
+  if (h.plainLyrics) return h.plainLyrics;
+  return (h.syncedLyrics || '').replace(/^\[[\d:.]+\]\s?/gm, '');
+}
+async function searchLyrics(q) {
+  const [a, b] = await Promise.allSettled([lrclib(q), suggestions(q)]);
+  const hits = [...(a.value || []), ...(b.value || [])];
+  if (!hits.length && (a.status === 'rejected' || b.status === 'rejected')) throw a.reason || b.reason;
+  const nq = norm(q), seen = new Set(), freq = {};
+  // Ohne Interpret: Wer unter den Treffern oft vorkommt, ist meist das Original.
+  for (const h of hits) { const k = norm(h.artistName); freq[k] = (freq[k] || 0) + 1; }
+  const score = h => rank(nq, h) + Math.min(freq[norm(h.artistName)], 6) * 3 + (h.lazy ? 6 - Math.min(h.order, 6) : 2);
+  return hits
+    .filter(h => h.lazy || (!h.instrumental && plainText(h).trim()))
+    .map(h => ({ h, s: score(h) }))
+    .sort((x, y) => y.s - x.s)
+    .map(x => x.h)
+    .filter(h => { const k = norm(h.trackName) + '|' + norm(h.artistName); if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, 8);
+}
+
+/* ---------- Text in Zeilen legen ---------- */
+const measure = document.createElement('canvas').getContext('2d');
+function buildRows(text) {
+  measure.font = `${FS}px ${FONT}`;
+  const max = W - MX * 2 - 8, rows = [];
+  for (const raw of text.replace(/\r/g, '').split('\n')) {
+    const t = raw.trim();
+    if (!t) { if (rows.length && rows[rows.length - 1].k !== 'gap') rows.push({ k: 'gap' }); continue; }
+    if (/^\[.{1,40}\]$/.test(t)) { rows.push({ k: 'label', t: t.slice(1, -1) }); continue; }
+    let cur = '';
+    for (const word of t.split(/\s+/)) {
+      const next = cur ? cur + ' ' + word : word;
+      if (cur && measure.measureText(next).width > max) { rows.push({ k: 'line', t: cur }); cur = word; }
+      else cur = next;
+    }
+    rows.push({ k: 'line', t: cur });
+  }
+  while (rows.length && rows[rows.length - 1].k === 'gap') rows.pop();
+  if (!rows.some(r => r.k === 'line')) rows.push({ k: 'line', t: '' });
+  return rows;
+}
+// Nach dem Bearbeiten wandert jede Notiz mit ihrer Textzeile mit.
+function remapStrokes(oldRows, newRows, strokes) {
+  const map = {}; let from = 0;
+  oldRows.forEach((r, i) => {
+    if (r.k !== 'line') return;
+    const k = newRows.findIndex((n, x) => x >= from && n.k === 'line' && n.t === r.t);
+    if (k >= 0) { map[i] = k; from = k + 1; }
+  });
+  const lines = newRows.map((r, i) => r.k === 'line' ? i : -1).filter(i => i >= 0);
+  for (const s of strokes) s.row = map[s.row] ?? lines.reduce((b, i) => Math.abs(i - s.row) < Math.abs(b - s.row) ? i : b, lines[0]);
+}
+
+/* ---------- Startseite ---------- */
+let library = [];
+const status = (t, bad) => { $('#status').textContent = t || ''; $('#status').classList.toggle('bad', !!bad); };
+const dateFmt = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+function itemEl(title, sub, onTap) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'item';
+  const t = document.createElement('b'); t.textContent = title;
+  const s = document.createElement('span'); s.textContent = sub;
+  b.append(t, s); b.onclick = onTap;
+  return b;
+}
+function renderLibrary() {
+  const f = norm($('#q').value);
+  const list = library
+    .filter(s => !f || norm(s.title + ' ' + s.artist).includes(f))
+    .sort((a, b) => b.updated - a.updated);
+  $('#songs').replaceChildren(...list.map(s => {
+    const notes = s.strokes.length ? ' · mit Notizen' : '';
+    return itemEl(s.title, `${s.artist || 'Unbekannt'} · ${dateFmt.format(s.updated)}${notes}`, () => openSong(s));
+  }));
+  $('#empty').hidden = library.length > 0;
+}
+async function refreshLibrary() { library = await allSongs(); renderLibrary(); }
+
+$('#q').addEventListener('input', () => { $('#resultsBox').hidden = true; status(''); renderLibrary(); });
+$('#searchForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('#q').value.trim();
+  if (!q) return;
+  $('#q').blur();
+  $('#resultsBox').hidden = true;
+  status('Suche läuft …');
+  try {
+    const hits = await searchLyrics(q);
+    if (!hits.length) { status(`Nichts gefunden für „${q}“. Probier es mit Interpret, zum Beispiel „Oasis - Wonderwall“.`); $('#resultsBox').hidden = false; $('#results').replaceChildren(); return; }
+    status('');
+    $('#results').replaceChildren(...hits.map(h => itemEl(h.trackName, [h.artistName, h.albumName].filter(Boolean).join(' · '), () => addFromHit(h))));
+    $('#resultsBox').hidden = false;
+  } catch (err) {
+    console.warn(err);
+    status(navigator.onLine === false ? 'Keine Internetverbindung. Deine gespeicherten Songs funktionieren weiter.' : 'Der Songtext-Dienst ist gerade überlastet. Tipp gleich noch mal auf Suchen.', true);
+  }
+});
+async function createSong(title, artist, text) {
+  const s = { id: crypto.randomUUID(), title, artist, rows: buildRows(text), gap: 'm', strokes: [], updated: Date.now() };
+  await putSong(s);
+  library.push(s);
+  return s;
+}
+async function addFromHit(h) {
+  const dup = library.find(s => norm(s.title) === norm(h.trackName) && norm(s.artist) === norm(h.artistName));
+  if (dup) return openSong(dup);
+  status('Text wird geladen …');
+  const text = await fetchText(h);
+  if (!text.trim()) { status('Für diesen Treffer gibt es keinen Text. Nimm einen anderen oder füge ihn selbst ein.', true); return; }
+  status('');
+  openSong(await createSong(h.trackName, h.artistName || '', text));
+}
+
+/* ---------- Blatt ---------- */
+const scroller = $('#scroller'), sizer = $('#sizer'), paper = $('#paper'), ink = $('#ink'), rowsEl = $('#rows');
+let song = null, base = [], scale = 1, tool = 'pen', color = '#1d4ed8', fingerDraw = false;
+let undoStack = [], redoStack = [], saveTimer = 0, wake = null;
+const pathOf = new Map();
+
+function openSong(s) {
+  song = s;
+  undoStack = []; redoStack = [];
+  $('#home').hidden = true;
+  $('#sheetView').hidden = false;
+  $('#barTitle').textContent = s.title;
+  $('#sTitle').textContent = s.title;
+  $('#sArtist').textContent = s.artist || '';
+  renderRows();
+  pathOf.clear();
+  layout();
+  renderInk();
+  scroller.scrollTop = 0;
+  syncButtons();
+  keepAwake();
+}
+function closeSong() {
+  flushSave();
+  song = null;
+  if (wake) { wake.release().catch(() => {}); wake = null; }
+  $('#menu').hidden = true;
+  $('#sheetView').hidden = true;
+  $('#home').hidden = false;
+  refreshLibrary();
+}
+function renderRows() {
+  rowsEl.replaceChildren(...song.rows.map(r => {
+    const d = document.createElement('div');
+    d.className = 'row' + (r.k === 'label' ? ' label' : '');
+    d.textContent = r.t || '';
+    return d;
+  }));
+}
+function layout() {
+  const g = GAPS[song.gap] || GAPS.m;
+  let y = HEAD;
+  song.rows.forEach((r, i) => {
+    y += r.k === 'gap' ? 26 : r.k === 'label' ? 54 : g + TH;
+    base[i] = y;
+    rowsEl.children[i].style.top = y - TH + 'px';
+  });
+  base.length = song.rows.length;
+  const H = y + FOOT;
+  paper.style.height = H + 'px';
+  ink.setAttribute('height', H);
+  ink.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  ink.style.height = H + 'px';
+  for (const [s, el] of pathOf) el.setAttribute('transform', `translate(0 ${base[s.row]})`);
+  fit();
+}
+function fit() {
+  if (!song) return;
+  scale = Math.min(scroller.clientWidth / W, MAX_SCALE);
+  paper.style.transform = `scale(${scale})`;
+  sizer.style.width = W * scale + 'px';
+  sizer.style.height = parseFloat(paper.style.height) * scale + 'px';
+}
+new ResizeObserver(fit).observe(scroller);
+
+function pathD(p) {
+  const n = p.length / 3;
+  if (n < 2) return `M${p[0]} ${p[1]}l.01 0`;
+  let d = `M${p[0]} ${p[1]}`;
+  for (let i = 1; i < n - 1; i++) {
+    const x = p[3 * i], y = p[3 * i + 1];
+    d += `Q${x} ${y} ${(x + p[3 * i + 3]) / 2} ${(y + p[3 * i + 4]) / 2}`;
+  }
+  return d + `L${p[3 * n - 3]} ${p[3 * n - 2]}`;
+}
+function makePath(color, w) {
+  const el = document.createElementNS(SVGNS, 'path');
+  el.setAttribute('stroke', color);
+  el.setAttribute('stroke-width', w);
+  ink.append(el);
+  return el;
+}
+function drawStroke(s) {
+  const el = makePath(s.c, s.w);
+  el.setAttribute('d', pathD(s.pts));
+  el.setAttribute('transform', `translate(0 ${base[s.row]})`);
+  pathOf.set(s, el);
+}
+function renderInk() {
+  ink.replaceChildren();
+  pathOf.clear();
+  for (const s of song.strokes) drawStroke(s);
+}
+function unlinkStroke(s) {
+  pathOf.get(s)?.remove();
+  pathOf.delete(s);
+  const i = song.strokes.indexOf(s);
+  if (i >= 0) song.strokes.splice(i, 1);
+}
+function linkStroke(s) { song.strokes.push(s); drawStroke(s); }
+
+function rowFor(y) {
+  let last = 0;
+  for (let i = 0; i < base.length; i++) {
+    if (song.rows[i].k !== 'line') continue;
+    last = i;
+    if (base[i] + 8 >= y) return i;
+  }
+  return last;
+}
+
+/* Stift: Finger scrollen, der Stift schreibt. */
+let active = null, paperRect = null, lastPen = 0, raf = 0;
+const round = n => Math.round(n * 10) / 10;
+function toPaper(e) { return [(e.clientX - paperRect.left) / scale, (e.clientY - paperRect.top) / scale]; }
+function canDraw(e) {
+  if (e.pointerType === 'pen') return true;
+  if (e.pointerType === 'mouse') return e.button === 0;
+  return fingerDraw;
+}
+function eraseAt(x, y) {
+  for (const s of [...song.strokes]) {
+    const b = base[s.row], p = s.pts;
+    for (let i = 0; i < p.length; i += 3) {
+      if (Math.hypot(p[i] - x, p[i + 1] + b - y) < ERASE_R) {
+        unlinkStroke(s);
+        active.erased.push(s);
+        break;
+      }
+    }
+  }
+}
+function addPoint(x, y) {
+  const p = active.pts, n = p.length;
+  if (n && Math.hypot(p[n - 3] - x, p[n - 2] - y) < 0.7) return;
+  p.push(round(x), round(y), 0);
+}
+function repaint() {
+  raf = 0;
+  if (active && active.el) active.el.setAttribute('d', pathD(active.pts));
+}
+scroller.addEventListener('pointerdown', e => {
+  if (!song || active || !canDraw(e)) return;
+  e.preventDefault();
+  $('#menu').hidden = true;
+  $('#more').setAttribute('aria-expanded', 'false');
+  try { scroller.setPointerCapture(e.pointerId); } catch { /* der Strich geht trotzdem */ }
+  paperRect = paper.getBoundingClientRect();
+  const [x, y] = toPaper(e);
+  if (tool === 'erase') {
+    active = { id: e.pointerId, erased: [] };
+    eraseAt(x, y);
+  } else {
+    active = { id: e.pointerId, pts: [], el: makePath(color, PEN_W) };
+    addPoint(x, y);
+    repaint();
+  }
+});
+scroller.addEventListener('pointermove', e => {
+  if (!active || e.pointerId !== active.id) return;
+  e.preventDefault();
+  const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  for (const ev of events.length ? events : [e]) {
+    const [x, y] = toPaper(ev);
+    if (active.erased) eraseAt(x, y); else addPoint(x, y);
+  }
+  if (!active.erased && !raf) raf = requestAnimationFrame(repaint);
+});
+function finishStroke(e) {
+  if (!active || e.pointerId !== active.id) return;
+  const a = active;
+  active = null;
+  lastPen = performance.now();
+  if (a.erased) {
+    if (a.erased.length) pushHistory({ del: a.erased });
+    return;
+  }
+  const ys = a.pts.filter((_, i) => i % 3 === 1);
+  const row = rowFor((Math.min(...ys) + Math.max(...ys)) / 2);
+  const b = base[row];
+  for (let i = 1; i < a.pts.length; i += 3) a.pts[i] = round(a.pts[i] - b);
+  const s = { row, c: color, w: PEN_W, pts: a.pts };
+  a.el.setAttribute('d', pathD(s.pts));
+  a.el.setAttribute('transform', `translate(0 ${b})`);
+  song.strokes.push(s);
+  pathOf.set(s, a.el);
+  pushHistory({ add: [s] });
+}
+scroller.addEventListener('pointerup', finishStroke);
+scroller.addEventListener('pointercancel', finishStroke);
+
+// Ohne das hier würde der Pencil die Seite verschieben statt zu schreiben,
+// und die aufliegende Hand könnte beim Schreiben scrollen.
+scroller.addEventListener('touchstart', e => {
+  const stylus = [...e.changedTouches].some(t => t.touchType === 'stylus');
+  if (stylus || active || performance.now() - lastPen < 400) e.preventDefault();
+}, { passive: false });
+scroller.addEventListener('touchmove', e => { if (active && e.cancelable) e.preventDefault(); }, { passive: false });
+
+function pushHistory(entry) { undoStack.push(entry); redoStack = []; touched(); }
+function apply(entry, forward) {
+  const add = forward ? entry.add : entry.del, del = forward ? entry.del : entry.add;
+  (del || []).forEach(unlinkStroke);
+  (add || []).forEach(linkStroke);
+}
+function undo() { const e = undoStack.pop(); if (e) { apply(e, false); redoStack.push(e); touched(); } }
+function redo() { const e = redoStack.pop(); if (e) { apply(e, true); undoStack.push(e); touched(); } }
+function touched() { syncButtons(); clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 300); }
+function flushSave() {
+  if (!saveTimer || !song) return;
+  clearTimeout(saveTimer); saveTimer = 0;
+  song.updated = Date.now();
+  putSong(song).catch(err => { console.error(err); alert('Speichern hat nicht geklappt. Bitte erstelle eine Sicherung.'); });
+}
+function syncButtons() {
+  $('#undo').disabled = !undoStack.length;
+  $('#redo').disabled = !redoStack.length;
+  $('#toolPen').setAttribute('aria-pressed', tool === 'pen');
+  $('#toolErase').setAttribute('aria-pressed', tool === 'erase');
+  document.querySelectorAll('.dot').forEach(d => d.setAttribute('aria-pressed', d.dataset.color === color));
+  document.querySelectorAll('#gapSeg button').forEach(b => b.setAttribute('aria-pressed', !!song && b.dataset.gap === (song.gap || 'm')));
+}
+
+/* Das iPad soll beim Spielen nicht ausgehen. */
+async function keepAwake() {
+  try {
+    if (song && !wake && 'wakeLock' in navigator && document.visibilityState === 'visible') {
+      wake = await navigator.wakeLock.request('screen');
+      wake.addEventListener('release', () => { wake = null; });
+    }
+  } catch { /* nicht jede iPadOS-Version erlaubt das */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushSave(); else keepAwake();
+});
+window.addEventListener('pagehide', flushSave);
+
+$('#back').onclick = closeSong;
+$('#toolPen').onclick = () => { tool = 'pen'; syncButtons(); };
+$('#toolErase').onclick = () => { tool = 'erase'; syncButtons(); };
+document.querySelectorAll('.dot').forEach(d => d.onclick = () => { color = d.dataset.color; tool = 'pen'; syncButtons(); });
+$('#undo').onclick = undo;
+$('#redo').onclick = redo;
+$('#more').onclick = () => {
+  const m = $('#menu');
+  m.hidden = !m.hidden;
+  $('#more').setAttribute('aria-expanded', !m.hidden);
+};
+document.querySelectorAll('#gapSeg button').forEach(b => b.onclick = () => {
+  song.gap = b.dataset.gap;
+  layout();
+  touched();
+});
+$('#finger').onchange = e => { fingerDraw = e.target.checked; scroller.classList.toggle('finger', fingerDraw); };
+$('#deleteSong').onclick = async () => {
+  if (!confirm(`„${song.title}“ mit allen Akkorden löschen?`)) return;
+  clearTimeout(saveTimer); saveTimer = 0;
+  await delSong(song.id);
+  closeSong();
+};
+
+/* ---------- Text einfügen und bearbeiten ---------- */
+let editing = null;
+function openEditor(s) {
+  editing = s;
+  $('#editorTitle').textContent = s ? 'Text bearbeiten' : 'Text einfügen';
+  $('#fTitle').value = s ? s.title : '';
+  $('#fArtist').value = s ? s.artist : '';
+  $('#fText').value = s ? s.rows.map(r => r.k === 'gap' ? '' : r.k === 'label' ? `[${r.t}]` : r.t).join('\n') : '';
+  $('#menu').hidden = true;
+  $('#editor').showModal();
+}
+$('#pasteNew').onclick = () => openEditor(null);
+$('#pasteFromResults').onclick = () => openEditor(null);
+$('#editText').onclick = () => openEditor(song);
+$('#editorCancel').onclick = () => $('#editor').close();
+$('#editorForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const title = $('#fTitle').value.trim(), artist = $('#fArtist').value.trim(), text = $('#fText').value;
+  if (!title) return;
+  $('#editor').close();
+  if (editing) {
+    const rows = buildRows(text);
+    remapStrokes(song.rows, rows, song.strokes);
+    Object.assign(song, { title, artist, rows });
+    undoStack = []; redoStack = [];
+    openSong(song);
+    touched();
+  } else {
+    openSong(await createSong(title, artist, text));
+  }
+});
+
+/* ---------- Sicherung ---------- */
+$('#backupSave').onclick = async () => {
+  const name = `akkordblatt-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([JSON.stringify({ app: 'akkordblatt', songs: await allSongs() })], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); } catch { /* abgebrochen */ }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+$('#backupLoad').onclick = () => $('#backupFile').click();
+$('#backupFile').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (data.app !== 'akkordblatt' || !Array.isArray(data.songs)) throw new Error('falsche Datei');
+    for (const s of data.songs) await putSong(s);
+    await refreshLibrary();
+    status(`${data.songs.length} Songs geladen.`);
+  } catch {
+    status('Diese Datei ist keine Akkordblatt-Sicherung.', true);
+  }
+};
+
+/* ---------- Start ---------- */
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+refreshLibrary();
+</script>
+</body>
+</html>
